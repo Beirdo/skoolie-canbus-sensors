@@ -23,7 +23,10 @@ int filter_count = NELEMS(filters);
 
 void setup(void)
 {
-  linbusBridge.begin();
+  Serial.setRx(PIN_USART2_RX);
+  Serial.setTx(PIN_USART2_TX);
+
+  linbusBridge.begin(Serial);
 
   init_canbus_stm32_internal(PIN_CAN_EN, filters, filter_count);
 }

@@ -29,9 +29,9 @@ int default_map_count = NELEMS(default_map);
 
 void linbus_callback(int timer_id, int delay_ms);
 
-void LINBusBridge::begin(void)
+void LINBusBridge::begin(HardwareSerial &serial)
 {
-  _linbus = new LINBus_stack(Serial, 19200);
+  _linbus = new LINBus_stack(serial, 19200);
   
   setOpenDrainOutput(PIN_LIN_SLP, false, true);
   setOpenDrainOutput(PIN_LIN_WAKE, false, true);
@@ -53,6 +53,8 @@ void LINBusBridge::begin(void)
       globalTimer.register_timer(i, 500, linbus_callback);
     }    
   }
+
+  _linbus->begin(PIN_LIN_WAKE, PIN_LIN_SLP);
 }
 
 void LINBusBridge::update(int index)

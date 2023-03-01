@@ -1,3 +1,4 @@
+#include "HardwareSerial.h"
 #ifndef __linbus_bridge_h_
 #define __linbus_bridge_h_
 
@@ -16,7 +17,7 @@ typedef struct {
 class LINBusBridge {
   public:
     LINBusBridge(int id, int base, int mask) : _id(id), _base(base), _mask(mask), _linbus(0), _map(0), _map_count(0) {};
-    void begin(void);
+    void begin(HardwareSerial &serial);
     void update(int index);
     void callback(int index, int delay_ms);
     int getMapIndex(int canbus_id);
