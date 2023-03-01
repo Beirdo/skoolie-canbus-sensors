@@ -21,8 +21,9 @@
 // } linbus_map_t;
 
 const linbus_map_t default_map[] = {
-  {CANBUS_ID_VEHICLE_FAN_SPEED, 0x00, 3, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
-  {CANBUS_ID_VEHICLE_FAN_TEMP, 0x00, 6, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
+  {CANBUS_ID_VEHICLE_FAN_SPEED, 0x00, 3, 2, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
+  {CANBUS_ID_VEHICLE_FAN_INT_TEMP, 0x00, 5, 1, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
+  {CANBUS_ID_VEHICLE_FAN_EXT_TEMP, 0x00, 6, 2, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
 };
 int default_map_count = NELEMS(default_map);
 
@@ -66,20 +67,20 @@ void LINBusBridge::update(int index)
   int linbus_id = _map[index].linbus_id;
   uint8_t register_index = _map[index].register_index;
 
-  uint16_t data;
+  uint32_t data;
   uint8_t *buf = (uint8_t *)&data;
+  uint8_t bytes = clamp<uint8_t>(_map[index].register_bytes, 1, 4);
 
   _linbus->write(linbus_id, &register_index, 1);
   _linbus->writeRequest(linbus_id);
-  _linbus->readStream(buf, 2);
+  _linbus->readStream(buf, bytes);
 
   int now = millis();
   _map[index].last_update = now;
   _slaves[linbus_id].last_update = now;
 
-  int32_t value = (((int32_t)buf[0]) << 8) | buf[1];
-
-  canbus_output_value(_map[index].canbus_id, value, 2);
+  uint32_t value = __bswap32(data);
+  canbus_output_value(_map[index].canbus_id, value, bytes);
 }
 
 void LINBusBridge::probe(void)
@@ -111,10 +112,11 @@ void LINBusBridge::callback(int index, int delay_ms)
     return;
   }
 
-  delay_ms = clamp<int>(1000 - delay_ms, 1, 500);
-  globalTimer.register_timer(index, delay_ms, linbus_callback);
-
   update(index);
+
+  int slop = delay_ms - 500;
+  delay_ms = clamp<int>(500 - slop, 1, 500);
+  globalTimer.register_timer(index, delay_ms, linbus_callback);
 }
 
 int LINBusBridge::getMapIndex(int canbus_id)

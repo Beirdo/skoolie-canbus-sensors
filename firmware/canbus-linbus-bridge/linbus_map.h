@@ -30,6 +30,7 @@ typedef struct {
   uint8_t canbus_id;
   uint8_t linbus_id;
   uint8_t register_index;
+  uint8_t register_bytes;
   uint8_t type;
   uint8_t location;
   int last_update;
