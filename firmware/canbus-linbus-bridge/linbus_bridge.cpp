@@ -21,9 +21,9 @@
 // } linbus_map_t;
 
 const linbus_map_t default_map[] = {
-  {CANBUS_ID_VEHICLE_FAN_SPEED, 0x00, 3, 2, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
-  {CANBUS_ID_VEHICLE_FAN_INT_TEMP, 0x00, 5, 1, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
-  {CANBUS_ID_VEHICLE_FAN_EXT_TEMP, 0x00, 6, 2, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},  
+  {CANBUS_ID_VEHICLE_FAN_SPEED,    0x00, 3, 2, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},
+  {CANBUS_ID_VEHICLE_FAN_INT_TEMP, 0x00, 5, 1, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},
+  {CANBUS_ID_VEHICLE_FAN_EXT_TEMP, 0x00, 6, 2, BOARD_TYPE_FAN_CONTROL, LOC_HEATER_CORE, 0, false},
 };
 int default_map_count = NELEMS(default_map);
 
@@ -33,7 +33,7 @@ void linbus_callback(int timer_id, int delay_ms);
 void LINBusBridge::begin(HardwareSerial &serial)
 {
   _linbus = new LINBus_stack(serial, 19200);
-  
+
   setOpenDrainOutput(PIN_LIN_SLP, false, true);
   setOpenDrainOutput(PIN_LIN_WAKE, false, true);
 
@@ -52,7 +52,7 @@ void LINBusBridge::begin(HardwareSerial &serial)
       _map[i].active = 0;
       _map[i].last_update = 0;
       globalTimer.register_timer(i, 500, linbus_callback);
-    }    
+    }
   }
 
   _linbus->begin(PIN_LIN_WAKE, PIN_LIN_SLP);
@@ -124,11 +124,11 @@ int LINBusBridge::getMapIndex(int canbus_id)
   if (!_map) {
     return -1;
   }
-  
+
   for (int i = 0; i < _map_count; i++) {
     if (_map[i].canbus_id == canbus_id) {
       return i;
-    }   
+    }
   }
 
   return -1;
@@ -137,7 +137,7 @@ int LINBusBridge::getMapIndex(int canbus_id)
 void LINBusBridge::write(int index, uint8_t *buf, int len)
 {
   if (index >= _map_count || !_map || !_map[index].active) {
-    return;    
+    return;
   }
 
   len = clamp<int>(len, 1, 2);
