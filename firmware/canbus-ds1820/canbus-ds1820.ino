@@ -13,9 +13,9 @@
 DS2482Sensor externalTempSensor(CANBUS_ID_EXTERNAL_TEMP, I2C_ADDRESS_DS2482, 12);
 
 CAN_filter_t filters[] = {
-  {0, 0, 0, 0, 
-   0xFF00 | STM32_CAN::makeFilter16(CANBUS_ID_EXTERNAL_TEMP, STANDARD_FORMAT, REMOTE_FRAME),
-   0xFF00 | STM32_CAN::makeFilter16(CANBUS_ID_EXTERNAL_TEMP | CANBUS_ID_WRITE_MODIFIER, STANDARD_FORMAT, DATA_FRAME)},  
+  {0, 0, 0, 0,
+   0xFFFF0000 | STM32_CAN::makeFilter16(CANBUS_ID_EXTERNAL_TEMP, STANDARD_FORMAT, REMOTE_FRAME),
+   0xFFFF0000 | STM32_CAN::makeFilter16(CANBUS_ID_EXTERNAL_TEMP | CANBUS_ID_WRITE_MODIFIER, STANDARD_FORMAT, DATA_FRAME)},
 };
 int filter_count = NELEMS(filters);
 
@@ -37,7 +37,7 @@ void setup(void)
 void loop(void)
 {
   int topOfLoop = millis();
-  
+
   externalTempSensor.update();
 
   update_canbus_rx();
