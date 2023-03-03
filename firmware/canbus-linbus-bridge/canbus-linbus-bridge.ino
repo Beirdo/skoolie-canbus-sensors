@@ -9,7 +9,7 @@
 #include "project.h"
 #include "linbus_bridge.h"
 
-LINBusBridge linbusBridge(CANBUS_ID_LINBUS_BRIDGE, CANBUS_ID_LINBUS_BASE, CANBUS_ID_LINBUS_MASK);
+LINBusBridge linbusBridge(500);
 
 CAN_filter_t filters[] = {
   {0, 0, 0, 0,

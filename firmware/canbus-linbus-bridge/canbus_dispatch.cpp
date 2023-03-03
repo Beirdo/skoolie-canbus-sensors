@@ -14,7 +14,12 @@ void canbus_dispatch(int id, uint8_t *buf, int len, uint8_t type)
 
     case CANBUS_ID_LINBUS_BRIDGE | CANBUS_ID_WRITE_MODIFIER:
     default:
-      // No local control knobs.  Ignore em.
+      if (len == 3) {
+        bool enable = !(!buf[0]);
+        int canbus_id = (((uint16_t)buf[1]) << 8) | buf[2];
+        int index = linbusBridge.getMapIndex(canbus_id);
+        linbusBridge.enable(index, enable);
+      }
       break;
   }
 

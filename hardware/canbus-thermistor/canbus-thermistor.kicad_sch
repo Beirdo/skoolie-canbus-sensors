@@ -2846,7 +2846,7 @@
     (property "Value" "UART 3.3V" (id 1) (at 234.95 120.5229 90)
       (effects (font (size 1.27 1.27)) (justify right))
     )
-    (property "Footprint" "" (id 2) (at 232.537 119.253 0)
+    (property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Open_TrianglePad1.0x1.5mm" (id 2) (at 232.537 119.253 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "~" (id 3) (at 232.537 119.253 0)
