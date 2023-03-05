@@ -15,7 +15,7 @@ typedef struct {
 } linbus_slave_t;
 
 typedef struct {
-  uint8_t canbus_id;
+  uint16_t canbus_id;
   uint8_t linbus_id;
   uint8_t register_index;
   uint8_t register_bytes;
