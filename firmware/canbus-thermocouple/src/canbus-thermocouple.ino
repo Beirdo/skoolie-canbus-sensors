@@ -21,10 +21,10 @@ int filter_count = NELEMS(filters);
 
 void setup(void)
 {
-  Serial.setRx(PIN_USART2_RX);
-  Serial.setTx(PIN_USART2_TX);
-  Serial.begin(115200);
-  setup_logging(LOG_LEVEL_VERBOSE, &Serial);
+  Serial2.setRx(PIN_USART2_RX);
+  Serial2.setTx(PIN_USART2_TX);
+  Serial2.begin(115200);
+  setup_logging(LOG_LEVEL_VERBOSE, &Serial2);
 
   Wire.begin();
   Wire.setClock(400000);
