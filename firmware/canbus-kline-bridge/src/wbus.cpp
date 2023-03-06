@@ -4,6 +4,7 @@
 #include <cppQueue.h>
 #include <canbus_ids.h>
 #include <canbus.h>
+#include <sensor.h>
 
 #include "project.h"
 #include "wbus_packet.h"
@@ -27,7 +28,7 @@ int wbus_rx_tail;
 cppQueue wbus_rx_q(sizeof(wbusPacket_t *), WBUS_FIFO_SIZE, FIFO);
 cppQueue wbus_tx_q(sizeof(wbusPacket_t *), WBUS_FIFO_SIZE, FIFO);
 
-uint8_t *wbus_canbus_send(uint8_t cmd, uint8_t *buf, uint8_t len);
+uint8_t *wbus_canbus_send(wbusPacket_t *packet);
 
 void init_wbus(void)
 {
@@ -45,7 +46,7 @@ void init_wbus(void)
 
 void send_break(void)
 {
-  Serial2.end();
+  Serial.end();
 
   // Send a break - may not be needed as we are the slave, not the master.
   digitalWrite(PIN_USART2_TX, HIGH);
@@ -163,15 +164,20 @@ void receive_wbus_from_serial(void)
         uint8_t *buf = (uint8_t *)malloc(len);
         memcpy(buf, (const void *)wbus_rx_buffer, len);
 
-        wbusPacket_t *packet = (wbusPacket_t *)malloc(sizeof(wbusPacket_t));
-        packet->buf = buf;
-        packet->len = len;
-
-        wbus_rx_q.push(&packet);
+        wbus_queue_rx_packet(buf, len);
         wbus_rx_tail = 0;
       }
     }
   }
+}
+
+void wbus_queue_rx_packet(uint8_t *buf, int len)
+{
+  wbusPacket_t *packet = (wbusPacket_t *)malloc(sizeof(wbusPacket_t));
+  packet->buf = buf;
+  packet->len = len;
+
+  wbus_rx_q.push(&packet);
 }
 
 void process_wbus(void)
@@ -212,30 +218,33 @@ wbusPacket_t *wbus_rx_dispatch(wbusPacket_t *packet, uint8_t cmd)
   switch(cmd) {
     case 0x20:
       // Start for x minutes, default mode
-
     case 0x21:
       // Start for x minutes, parking heater on
-
     case 0x22:
       // Start for x minutes, ventilation on
-
     case 0x23:
       // Start for x minutes, supplemental heating on
-
     case 0x24:
       // Start for x minutes, circulation pump on
-
     case 0x25:
       // Start for x minutes, boost on
-
     case 0x26:
       // Start for x minutes, coolng on
-      minutes = packet->buf[3];
-      break;
-
     case 0x10:
       // Shutdown, no data
-      buf = wbus_canbus_send(cmd, &minutes, 1)
+    case 0x44:
+      // Seems to be a timer keepalive, I'm going to assume it adds the same number of minutes originally requested
+      // and returns a 16-bit "minutes remaining" time
+    case 0x48:
+      // Component test
+    case 0x51:
+      // Read stuff
+    case 0x56:
+      // event log
+    case 0x57:
+      // CO2 calibration (umm, we have a sensor for that?!)
+       buf = wbus_canbus_send(packet);
+    default:
       break;
 
     case 0x38:
@@ -243,43 +252,14 @@ wbusPacket_t *wbus_rx_dispatch(wbusPacket_t *packet, uint8_t cmd)
       buf = wbus_command_diagnostics();
       break;
 
-    case 0x44:
-      // Seems to be a timer keepalive, I'm going to assume it adds the same number of minutes originally requested
-      // and returns a 16-bit "minutes remaining" time
-      buf = wbus_canbus_send(cmd, &packet->buf[3], 2);
-      break;
-
-    case 0x48:
-      // Component test
-      buf = wbus_canbus_send(cmd, &packet->buf[3], 4);
-      break;
-
     case 0x50:
       // Read sensors
-      buf = wbus_command_read_sensor(packet->buf[3]);
-      break;
-
-    case 0x51:
-      // Read stuff
-      buf = wbus_command_read_stuff(packet->buf[3]);
+      buf = wbus_command_read_sensor(packet);
       break;
 
     case 0x53:
       // Read voltage data
       buf = wbus_command_read_voltage_data(packet->buf[3]);
-      break;
-
-    case 0x56:
-      // event log
-      buf = wbus_command_get_error_codes(packet->buf[3], packet->buf[4]);
-      break;
-
-    case 0x57:
-      // CO2 calibration (umm, we have a sensor for that?!)
-      buf = wbus_command_co2_calibration(packet->buf[3], packet->buf[4]);
-      break;
-
-    default:
       break;
   }
 
@@ -300,15 +280,9 @@ wbusPacket_t *wbus_rx_dispatch(wbusPacket_t *packet, uint8_t cmd)
   return respPacket;
 }
 
-uint8_t *wbus_canbus_send(uint8_t cmd, uint8_t *buf, uint8_t len)
+uint8_t *wbus_canbus_send(wbusPacket_t *packet)
 {
-  uint8_t outbuf[len + 1];
-  outbuf[0] = cmd;
-
-  len = clamp<uint8_t>(len, 0, 7);
-  memcpy(outbuf, buf, len);
-
-  canbus_send(CANBUS_ID_MAINBOARD | CANBUS_ID_WRITE_MODIFIER, outbuf, len + 1, CAN_DATA);
+  canbus_send(CANBUS_ID_MAINBOARD | CANBUS_ID_WRITE_MODIFIER, packet->buf, packet->len, CANFD_WITH_BIT_RATE_SWITCH);
   // our response will come back from CANBus and be queued for delivery.
   return 0;
 }
@@ -325,9 +299,11 @@ uint8_t *wbus_command_diagnostics(void)
 }
 
 // Some of these will be locally cached, some will not.
-uint8_t *wbus_command_read_sensor(uint8_t sensornum)
+uint8_t *wbus_command_read_sensor(wbusPacket_t *packet)
 {
-  switch(sensornum) {
+  uint8_t sensornum = packet->buf[3];
+
+  switch (sensornum) {
     case 0x02:
       // Status flags
       return wbus_read_status_sensor();
@@ -340,56 +316,37 @@ uint8_t *wbus_command_read_sensor(uint8_t sensornum)
     case 0x05:
       // Operational measurements
       return wbus_read_operational_sensor();
-    case 0x06:
-      // Operating times
-      return wbus_read_operating_time_sensor();
     case 0x07:
       // Operating state
       return wbus_read_state_sensor();
-    case 0x0A:
-      // Burning duration
-      return wbus_read_burning_duration_sensor();
-    case 0x0B:
-      // Operating duration
-      return wbus_read_operating_duration_sensor();
-    case 0x0C:
-      // Start counters
-      return wbus_read_start_counter_sensor();
     case 0x0F:
       // subsystem status
       return wbus_read_subsystem_status_sensor();
     case 0x11:
       // Temperature thresholds
       return wbus_read_temperature_thresh_sensor();
+
+    case 0x06:
+      // Operating times
+    case 0x0A:
+      // Burning duration
+    case 0x0B:
+      // Operating duration
+    case 0x0C:
+      // Start counters
     case 0x12:
       // Ventilation duration
-      return wbus_read_ventilation_duration_sensor();
+      return wbus_canbus_send(packet);
+
     case 0x13:
       // Fuel prewarming status
-      return wbus_read_fuel_prewarming_sensor();
+      // This is only wired in on ThermoTop V.  I have a ThermoTop C.
     case 0x14:
       // Spark Transmission
-      return wbus_read_spark_transmission_sensor();
+      // This is only on gasoline models.  I have a diesel model.
     default:
       return 0;
   }
-}
-
-// This will be proxied, and responses fragmented.
-uint8_t *wbus_command_read_stuff(uint8_t index)
-{
-  if (index <= 0x00 || index > 0x0D) {
-    return 0;
-  }
-
-  device_info_t *info = get_device_info(index - 1);
-  if (!info) {
-    return 0;
-  }
-
-  uint8_t *buf = allocate_response(0x51, 5 + info->len, index);
-  memcpy(&buf[4], info->buf, info->len);
-  return buf;
 }
 
 uint8_t *wbus_command_read_voltage_data(uint8_t index)
@@ -415,118 +372,13 @@ uint8_t *wbus_command_read_voltage_data(uint8_t index)
   return buf;
 }
 
-// This will be proxied, and the responses fragmented
-uint8_t *wbus_command_get_error_codes(uint8_t subcmd, uint8_t index)
-{
-  switch(subcmd) {
-    case 0x01:
-      return wbus_get_error_code_list();
-    case 0x02:
-      return wbus_get_error_code_details(index);
-    case 0x03:
-      return wbus_clear_error_code_list();
-    default:
-      return 0;
-  }
-}
-
-uint8_t *wbus_get_error_code_list(void)
-{
-  int error_list_len = fram_data.current.error_list_count;
-  int len = 5 + 2 * error_list_len;
-  uint8_t *buf = allocate_response(0x56, len, 0x01);
-
-  buf[4] = error_list_len;
-  for (int i = 0; i < error_list_len; i++) {
-    buf[5 + 2*i] = fram_data.current.error_list[i].code;
-    buf[6 + 2*i] = fram_data.current.error_list[i].count;
-  }
-  return buf;
-}
-
-uint8_t *wbus_get_error_code_details(uint8_t code)
-{
-  int error_list_len = fram_data.current.error_list_count;
-  int i;
-  for (i = 0; i < error_list_len; i++) {
-    if (fram_data.current.error_list[i].code == code) {
-      break;
-    }
-  }
-
-  if (i == error_list_len) {
-    return 0;
-  }
-
-  int index = i;
-
-  uint8_t *buf = allocate_response(0x56, 16, 0x02);
-
-  buf[4] = code;
-  buf[5] = fram_data.current.error_list[index].status;
-  buf[6] = fram_data.current.error_list[index].count;
-
-  uint16_t state = fram_data.current.error_list[index].state;
-  buf[7] = HI_BYTE(state);
-  buf[8] = LO_BYTE(state);
-  buf[9] = fram_data.current.error_list[i].temperature;
-
-  uint16_t millivolts = fram_data.current.error_list[index].vbat;
-  buf[10] = HI_BYTE(millivolts);
-  buf[11] = LO_BYTE(millivolts);
-
-  time_sensor_t *operating_time = &fram_data.current.error_list[i].operating_time;
-  buf[12] = HI_BYTE(operating_time->hours);
-  buf[13] = LO_BYTE(operating_time->hours);
-  buf[14] = operating_time->minutes;
-  return buf;
-}
-
-uint8_t *wbus_clear_error_code_list(void)
-{
-  uint8_t *buf = allocate_response(0x56, 5, 0x03);
-  fram_clear_error_list();
-  return buf;
-}
-
-uint8_t *wbus_command_co2_calibration(uint8_t index, uint8_t value)
-{
-  switch(index) {
-    case 0x01:
-      // read CO2 values
-      return wbus_get_co2();
-    case 0x03:
-      // write CO2 value
-      return wbus_set_co2(value);
-    default:
-      return 0;
-  }
-}
-
-uint8_t *wbus_get_co2(void)
-{
-//  CoreMutex m(&fram_mutex);
-
-  uint8_t *buf = allocate_response(0x57, 8, 0x01);
-
-  buf[4] = fram_data.current.current_co2;
-  buf[5] = fram_data.current.minimum_co2;
-  buf[6] = fram_data.current.maximum_co2;
-  return buf;
-}
-
-uint8_t *wbus_set_co2(uint8_t value)
-{
-  uint8_t *buf = allocate_response(0x57, 5, 0x03);
-  fram_write_co2(value);
-  buf[4] = value;
-  return buf;
-}
-
 uint8_t *wbus_read_status_sensor(void)
 {
   uint8_t *buf = allocate_response(0x50, 9, 0x02);
   uint8_t flags = 0x00;
+
+  Sensor *fsmMode = sensorRegistry.get(CANBUS_ID_FSM_MODE);
+  int32_t fsm_mode = fsmMode->get_value();
   flags |= (fsm_mode == WEBASTO_MODE_SUPPLEMENTAL_HEATER ? 0x10 : 0x00);
   flags |= ((fsm_mode == WEBASTO_MODE_SUPPLEMENTAL_HEATER || fsm_mode == WEBASTO_MODE_PARKING_HEATER) ? 0x01 : 0x00);
   buf[4] = flags;
@@ -540,6 +392,9 @@ uint8_t *wbus_read_status_sensor(void)
   buf[7] = 0x00;      // boost mode, auxiliary drive
 
   flags = 0x00;
+
+  Sensor *ignitionSensor = sensorRegistry.get(CANBUS_ID_IGNITION_SENSE);
+  int32_t ignitionOn = ignitionSensor->get_value();
   flags |= (ignitionOn ? 0x01 : 0x00);
   buf[8] = flags;
   return buf;
@@ -549,13 +404,26 @@ uint8_t *wbus_read_subsystem_enabled_sensor(void)
 {
   uint8_t *buf = allocate_response(0x50, 5, 0x03);
   uint8_t flags = 0x00;
-  flags |= (combustionFanPercent ? 0x01 : 0x00);
-  flags |= (glowPlugOutEnable ? 0x02 : 0x00);
-  flags |= (fuelPumpTimer.getBurnPower() ? 0x04 : 0x00);
-  flags |= (circulationPumpOn ? 0x08 : 0x00);
-  flags |= (vehicleFanPercent ? 0x10 : 0x00);
+
+  Sensor *combustionFan = sensorRegistry.get(CANBUS_ID_COMBUSTION_FAN_PERCENT);
+  flags |= (combustionFan->get_value() ? 0x01 : 0x00);
+
+  Sensor *glowPlugOn = sensorRegistry.get(CANBUS_ID_GLOW_PLUG_PERCENT);
+  flags |= (glowPlugOn->get_value() ? 0x02 : 0x00);
+
+  Sensor *burnPower = sensorRegistry.get(CANBUS_ID_BURN_POWER);
+  flags |= (burnPower->get_value() ? 0x04 : 0x00);
+
+  Sensor *circulationPump = sensorRegistry.get(CANBUS_ID_CIRCULATION_PUMP_PERCENT);
+  flags |= (circulationPump->get_value() ? 0x08 : 0x00);
+
+  Sensor *vehicleFanPercent = sensorRegistry.get(CANBUS_ID_VEHICLE_FAN_PERCENT);
+  flags |= (vehicleFanPercent->get_value() ? 0x10 : 0x00);
+
   flags |= 0x00;        // Nozzle stock heating... we don't have that??!
-  flags |= (glowPlugInEnable ? 0x40 : 0x00);
+
+  Sensor *flameSensor = sensorRegistry.get(CANBUS_ID_FLAME_DETECTOR_ENABLED);
+  flags |= (flameSensor->get_value() ? 0x40 : 0x00);
   buf[4] = flags;
   return buf;
 }
@@ -580,9 +448,12 @@ uint8_t *wbus_read_operational_sensor(void)
   int vbat = batteryVoltageSensor->get_value();
   buf[5] = HI_BYTE(vbat);
   buf[6] = LO_BYTE(vbat);
-  buf[7] = (glowPlugInEnable ? 0x01 : 0x00);
 
-  int power = fuelPumpTimer.getBurnPower();
+  Sensor *flameSensor = sensorRegistry.get(CANBUS_ID_FLAME_DETECTOR_ENABLED);
+  buf[7] = (flameSensor->get_value() ? 0x01 : 0x00);
+
+  Sensor *burnPower = sensorRegistry.get(CANBUS_ID_BURN_POWER);
+  int power = burnPower->get_value();
   buf[8] = HI_BYTE(power);
   buf[9] = LO_BYTE(power);
 
@@ -594,34 +465,17 @@ uint8_t *wbus_read_operational_sensor(void)
   return buf;
 }
 
-uint8_t *wbus_read_operating_time_sensor(void)
-{
-  int len = 12;
-  uint8_t *buf = (uint8_t *)malloc(len);
-  buf[1] = 0x06;
-  buf[3] = len - 2;
-
-  buf[4] = HI_BYTE(fram_data.current.total_burn_duration.hours);
-  buf[5] = LO_BYTE(fram_data.current.total_burn_duration.hours);
-  buf[6] = fram_data.current.total_burn_duration.minutes;
-  buf[7] = HI_BYTE(fram_data.current.total_working_duration.hours);
-  buf[8] = LO_BYTE(fram_data.current.total_working_duration.hours);
-  buf[9] = fram_data.current.total_working_duration.minutes;
-  buf[10] = HI_BYTE(fram_data.current.total_start_counter);
-  buf[11] = LO_BYTE(fram_data.current.total_start_counter);
-
-  return buf;
-}
-
 uint8_t *wbus_read_state_sensor(void)
 {
   uint8_t *buf = allocate_response(0x50, 10, 0x07);
 
-  buf[4] = fsm_state;
+  Sensor *fsmState = sensorRegistry.get(CANBUS_ID_FSM_STATE);
+  buf[4] = (uint8_t)fsmState->get_value();
   
   buf[5] = 0x00;                // Operating state state number ???
 
-  buf[6] = fram_data.current.device_status; // Device state bitfield,  0x01 = STFL, 0x02 = UEHFL, 0x04 = SAFL, 0x08 = RZFL
+  Sensor *deviceStatus = sensorRegistry.get(CANBUS_ID_DEVICE_STATUS);
+  buf[6] = (uint8_t)deviceStatus->get_value(); // Device state bitfield,  0x01 = STFL, 0x02 = UEHFL, 0x04 = SAFL, 0x08 = RZFL
   
   buf[7] = 0x00;                // unknown
   buf[8] = 0x00;                // unknown
@@ -629,61 +483,23 @@ uint8_t *wbus_read_state_sensor(void)
   return buf;
 }
 
-uint8_t *wbus_read_burning_duration_sensor(void)
-{
-  uint8_t *buf = allocate_response(0x50, 28, 0x0A);
-
-  int index = 4;
-  for (int i = 0; i < 4; i++) {
-    buf[index++] = HI_BYTE(fram_data.current.burn_duration_parking_heater[i].hours);
-    buf[index++] = LO_BYTE(fram_data.current.burn_duration_parking_heater[i].hours);
-    buf[index++] = fram_data.current.burn_duration_parking_heater[i].minutes;
-  }
-
-  for (int i = 0; i < 4; i++) {
-    buf[index++] = HI_BYTE(fram_data.current.burn_duration_supplemental_heater[i].hours);
-    buf[index++] = LO_BYTE(fram_data.current.burn_duration_supplemental_heater[i].hours);
-    buf[index++] = fram_data.current.burn_duration_supplemental_heater[i].minutes;
-  }
-
-  return buf;
-}
-
-uint8_t *wbus_read_operating_duration_sensor(void)
-{
-  uint8_t *buf = allocate_response(0x50, 10, 0x0B);
-
-  buf[4] = HI_BYTE(fram_data.current.working_duration_parking_heater.hours);
-  buf[5] = LO_BYTE(fram_data.current.working_duration_parking_heater.hours);
-  buf[6] = fram_data.current.working_duration_parking_heater.minutes;
-  buf[7] = HI_BYTE(fram_data.current.working_duration_supplemental_heater.hours);
-  buf[8] = LO_BYTE(fram_data.current.working_duration_supplemental_heater.hours);
-  buf[9] = fram_data.current.working_duration_supplemental_heater.minutes;
-
-  return buf;
-}
-
-uint8_t *wbus_read_start_counter_sensor(void)
-{
-  uint8_t *buf = allocate_response(0x50, 10, 0x0C);
-
-  buf[4] = HI_BYTE(fram_data.current.start_counter_parking_heater);
-  buf[5] = LO_BYTE(fram_data.current.start_counter_parking_heater);
-  buf[6] = HI_BYTE(fram_data.current.start_counter_supplemental_heater);
-  buf[7] = LO_BYTE(fram_data.current.start_counter_supplemental_heater);
-  buf[8] = HI_BYTE(fram_data.current.counter_emergency_shutdown);
-  buf[9] = LO_BYTE(fram_data.current.counter_emergency_shutdown);
-  return buf;
-}
-
 uint8_t *wbus_read_subsystem_status_sensor(void)
 {
   uint8_t *buf = allocate_response(0x50, 9, 0x0F);
-  buf[4] = (uint8_t)glowPlugPercent;
-  buf[5] = fuelPumpTimer.getFuelPumpFrequencyKline();
-  buf[6] = (uint8_t)combustionFanPercent;
+
+  Sensor *glowPlug = sensorRegistry.get(CANBUS_ID_GLOW_PLUG_PERCENT);
+  buf[4] = (uint8_t)glowPlug->get_value();
+
+  Sensor *fuelPump = sensorRegistry.get(CANBUS_ID_FUEL_PUMP_FREQUENCY);
+  buf[5] = (uint8_t)fuelPump->get_value();
+
+  Sensor *combustionFan = sensorRegistry.get(CANBUS_ID_COMBUSTION_FAN_PERCENT);
+  buf[6] = (uint8_t)combustionFan->get_value();
+
   buf[7] = 0x00;    // Unknown
-  buf[8] = (uint8_t)(circulationPumpOn ? 100 : 0);
+  
+  Sensor *circulationPump = sensorRegistry.get(CANBUS_ID_CIRCULATION_PUMP_PERCENT);
+  buf[8] = (uint8_t)circulationPump->get_value();
   return buf;
 }
 
@@ -695,25 +511,4 @@ uint8_t *wbus_read_temperature_thresh_sensor(void)
   buf[4] = 40;    // -10C
   buf[5] = 70;    // 20C
   return buf;
-}
-
-uint8_t *wbus_read_ventilation_duration_sensor(void)
-{
-  uint8_t *buf = allocate_response(0x50, 7, 0x12);
-  buf[4] = HI_BYTE(ventilation_duration.hours);
-  buf[5] = LO_BYTE(ventilation_duration.hours);
-  buf[6] = ventilation_duration.minutes;
-  return buf;
-}
-
-uint8_t *wbus_read_fuel_prewarming_sensor(void)
-{
-  // This is only wired in on ThermoTop V.  I have a ThermoTop C.
-  return 0;
-}
-
-uint8_t *wbus_read_spark_transmission_sensor(void)
-{
-  // This is only on gasoline models.  I have a diesel model.
-  return 0;
 }
