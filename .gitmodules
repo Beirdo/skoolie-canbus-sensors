@@ -70,3 +70,9 @@
 [submodule "firmware/canbus-kline-bridge/lib/acan2517FD"]
 	path = firmware/canbus-kline-bridge/lib/acan2517FD
 	url = https://github.com/pierremolinaro/acan2517FD.git
+[submodule "firmware/canbus-ds1820/lib/Arduino-Temperature-Control-Library"]
+	path = firmware/canbus-ds1820/lib/Arduino-Temperature-Control-Library
+	url = https://github.com/milesburton/Arduino-Temperature-Control-Library
+[submodule "firmware/canbus-ds1820/lib/OneWire"]
+	path = firmware/canbus-ds1820/lib/OneWire
+	url = https://github.com/PaulStoffregen/OneWire

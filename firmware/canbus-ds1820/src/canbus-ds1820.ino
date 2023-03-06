@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoLog.h>
-#include <Wire.h>
+
 #include <sensor.h>
 #include <Beirdo-Utilities.h>
 #include <canbus_stm32.h>
@@ -8,9 +8,9 @@
 #include <canbus.h>
 
 #include "project.h"
-#include "ds2482.h"
+#include "ds1820.h"
 
-DS2482Sensor externalTempSensor(CANBUS_ID_EXTERNAL_TEMP, I2C_ADDRESS_DS2482, 12);
+DS1820 ds1820(CANBUS_ID_EXTERNAL_TEMP, PIN_DQ, PIN_PCTLZ);
 
 CAN_filter_t filters[] = {
   {0, 0, 0, 0,
@@ -26,10 +26,7 @@ void setup(void)
   Serial.begin(115200);
   setup_logging(LOG_LEVEL_VERBOSE, &Serial);
 
-  Wire.begin();
-  Wire.setClock(400000);
-
-  externalTempSensor.init();
+  ds1820.init();
 
   init_canbus_stm32_internal(PIN_CAN_EN, filters, filter_count);
 }
@@ -38,7 +35,7 @@ void loop(void)
 {
   int topOfLoop = millis();
 
-  externalTempSensor.update();
+  ds1820.update();
 
   update_canbus_rx();
   update_canbus_tx();

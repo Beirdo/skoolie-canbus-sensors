@@ -1,8 +1,7 @@
 #ifndef __hal_conf_extra_h_
 #define __hal_conf_extra_h_
 
-#define HAL_I2C_MODULE_ENABLED
-
+#define HAL_I2C_MODULE_DISABLED
 #define HAL_CEC_MODULE_DISABLED
 #define HAL_ADC_MODULE_DISABLED
 #define HAL_I2S_MODULE_DISABLED
