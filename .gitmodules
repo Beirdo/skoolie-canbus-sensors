@@ -67,6 +67,6 @@
 [submodule "firmware/canbus-kline-bridge/lib/Beirdo-Utilities"]
 	path = firmware/canbus-kline-bridge/lib/Beirdo-Utilities
 	url = https://github.com/Beirdo/arduino-common-utils
-[submodule "firmware/canbus-kline-bridge/lib/Arduino-STM32-CAN"]
-	path = firmware/canbus-kline-bridge/lib/Arduino-STM32-CAN
-	url = https://github.com/Beirdo/Arduino-STM32-CAN
+[submodule "firmware/canbus-kline-bridge/lib/acan2517FD"]
+	path = firmware/canbus-kline-bridge/lib/acan2517FD
+	url = https://github.com/pierremolinaro/acan2517FD.git

@@ -1,20 +1,10 @@
 #ifndef __project_h_
 #define __project_h_
 
+#include <Arduino.h>
 #include <Beirdo-Utilities.h>
 
 #include "ds2482.h"
-
-// Serial2 -> Console
-#ifdef PIN_SERIAL2_TX
-#undef PIN_SERIAL2_TX
-#endif
-
-#ifdef PIN_SERIAL2_RX
-#undef PIN_SERIAL2_RX
-#endif
-
-
 
 #define PIN_USART2_TX         2   // PA_2
 #define PIN_USART2_RX         3   // PA_3

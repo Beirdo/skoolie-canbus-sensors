@@ -1,11 +1,11 @@
 #include <Arduino.h>
 #include <ArduinoLog.h>
+#include <Wire.h>
 #include <sensor.h>
 #include <Beirdo-Utilities.h>
 #include <canbus_stm32.h>
 #include <canbus_ids.h>
 #include <canbus.h>
-#include <Wire.h>
 
 #include "project.h"
 #include "ds2482.h"
