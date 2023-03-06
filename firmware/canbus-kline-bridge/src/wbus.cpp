@@ -282,7 +282,7 @@ wbusPacket_t *wbus_rx_dispatch(wbusPacket_t *packet, uint8_t cmd)
 
 uint8_t *wbus_canbus_send(wbusPacket_t *packet)
 {
-  canbus_send(CANBUS_ID_MAINBOARD | CANBUS_ID_WRITE_MODIFIER, packet->buf, packet->len, CANFD_WITH_BIT_RATE_SWITCH);
+  canbus_send(CANBUS_ID_WBUS | CANBUS_ID_WRITE_MODIFIER, packet->buf, packet->len, CANFD_WITH_BIT_RATE_SWITCH);
   // our response will come back from CANBus and be queued for delivery.
   return 0;
 }

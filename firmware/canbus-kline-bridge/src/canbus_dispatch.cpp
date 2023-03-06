@@ -40,7 +40,7 @@ void canbus_dispatch(int id, uint8_t *buf, int len, uint8_t type)
         break;
     }
   } else if (type == CANFD_WITH_BIT_RATE_SWITCH) {
-    if (id == CANBUS_ID_MAINBOARD) {
+    if (id == CANBUS_ID_WBUS) {
       // KLine Response
       uint8_t *newbuf = new uint8_t[len];
       memcpy(newbuf, buf, len);
