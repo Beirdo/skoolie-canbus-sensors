@@ -37,12 +37,3 @@
 [submodule "firmware/canbus-thermocouple/lib/Beirdo-Utilities"]
 	path = firmware/canbus-thermocouple/lib/Beirdo-Utilities
 	url = https://github.com/Beirdo/arduino-common-utils
-[submodule "firmware/canbus-kline-bridge/lib/Queue"]
-	path = firmware/canbus-kline-bridge/lib/Queue
-	url = https://github.com/SMFSW/Queue.git
-[submodule "firmware/canbus-kline-bridge/lib/Beirdo-Utilities"]
-	path = firmware/canbus-kline-bridge/lib/Beirdo-Utilities
-	url = https://github.com/Beirdo/arduino-common-utils
-[submodule "firmware/canbus-kline-bridge/lib/acan2517FD"]
-	path = firmware/canbus-kline-bridge/lib/acan2517FD
-	url = https://github.com/pierremolinaro/acan2517FD.git
