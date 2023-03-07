@@ -24,18 +24,27 @@ int rx_active;
 
 uint8_t wbus_rx_buffer[WBUS_BUFFER_SIZE];
 int wbus_rx_tail;
+volatile bool breakReceived = false;
 
 cppQueue wbus_rx_q(sizeof(wbusPacket_t *), WBUS_FIFO_SIZE, FIFO);
 cppQueue wbus_tx_q(sizeof(wbusPacket_t *), WBUS_FIFO_SIZE, FIFO);
 
 uint8_t *wbus_canbus_send(wbusPacket_t *packet);
 
+void USART2_errorCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->ErrorCode & HAL_UART_ERROR_FE) {
+    breakReceived = true;
+  }
+}
+
 void init_wbus(void)
 {
-  Serial.setRx(PIN_USART2_RX);
-  Serial.setTx(PIN_USART2_TX);
-  Serial.begin(2400, SERIAL_8E1);
-  Serial.flush();
+  Serial2.setRx(PIN_USART2_RX);
+  Serial2.setTx(PIN_USART2_TX);
+  Serial2.begin(2400, SERIAL_8E1);
+  uart_attach_error_callback(Serial2.getHandle(), USART2_errorCallback);
+  Serial2.flush();
 
   pinMode(PIN_KLINE_EN, OUTPUT);
   digitalWrite(PIN_KLINE_EN, LOW);
@@ -46,7 +55,7 @@ void init_wbus(void)
 
 void send_break(void)
 {
-  Serial.end();
+  Serial2.end();
 
   // Send a break - may not be needed as we are the slave, not the master.
   digitalWrite(PIN_USART2_TX, HIGH);
@@ -57,10 +66,11 @@ void send_break(void)
   delay(50);
   pinMode(PIN_USART2_TX, INPUT);
 
-  Serial.setRx(PIN_USART2_RX);
-  Serial.setTx(PIN_USART2_TX);
-  Serial.begin(2400, SERIAL_8E1);
-  Serial.flush();
+  Serial2.setRx(PIN_USART2_RX);
+  Serial2.setTx(PIN_USART2_TX);
+  Serial2.begin(2400, SERIAL_8E1);
+  uart_attach_error_callback(Serial2.getHandle(), USART2_errorCallback);
+  Serial2.flush();
 }
 
 void wbus_send_response(wbusPacket_t *respPacket)
@@ -98,7 +108,7 @@ void wbus_send_next_packet(void)
   tx_active = true;
   digitalWrite(PIN_KLINE_EN, HIGH);
   // send_break();  ?? - I think as slave we don't need to.
-  Serial.write(packet->buf, len);
+  Serial2.write(packet->buf, len);
   digitalWrite(PIN_KLINE_EN, LOW);
   tx_active = false;
 
@@ -130,22 +140,34 @@ uint8_t *allocate_response(uint8_t command, uint8_t len, uint8_t subcommand)
 
 void receive_wbus_from_serial(void)
 {
-  if (1) { // Serial.getBreakReceived()) {
-    rx_active = true;
-    wbus_rx_tail = 0;
-    Serial.flush();
+  int count = 0;
+  while (!breakReceived) {
+    count++;
+    delayMicroseconds(1000);
+    if (count >= 10) {
+      break;
+    }
   }
 
-  while(Serial && Serial.available()) {
+  if (!breakReceived) {
+    Serial2.flush();
+    return;
+  }
+
+  breakReceived = false;
+  rx_active = true;
+  wbus_rx_tail = 0;
+  Serial2.flush();
+  
+  while(Serial2 && Serial2.available()) {
     if (!rx_active) {
-      Serial.flush();
+      Serial2.flush();
       continue;
     }
 
-    uint8_t ch = Serial.read();
+    uint8_t ch = Serial2.read();
     if (wbus_rx_tail == 0 && ch != WBUS_RX_MATCH_ADDR) {
       rx_active = false;
-      Serial.flush();
       continue;
     }
 
@@ -157,7 +179,6 @@ void receive_wbus_from_serial(void)
         if (calc_wbus_checksum(wbus_rx_buffer, len)) {
           // Bad checksum.  Turf it.  Wait for new break
           rx_active = false;
-          Serial.flush();
           continue;
         }
 
